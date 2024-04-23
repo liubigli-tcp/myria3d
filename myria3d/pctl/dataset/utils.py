@@ -57,8 +57,13 @@ def pdal_read_las_array(las_path: str, epsg: str):
 def pdal_read_las_array_as_float32(las_path: str, epsg: str):
     """Read LAS as a a named array, casted to floats."""
     arr = pdal_read_las_array(las_path, epsg)
+    arr['X'] -= arr['X'][0]
+    arr['Y'] -= arr['Y'][0]
+    arr['Z'] -= arr['Z'][0]
     all_floats = np.dtype({"names": arr.dtype.names, "formats": ["f4"] * len(arr.dtype.names)})
-    return arr.astype(all_floats)
+    out = arr.astype(all_floats)
+
+    return out
 
 
 def get_metadata(las_path: str) -> dict:
