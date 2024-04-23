@@ -66,6 +66,10 @@ def lidar_hd_pre_transform(points, pos_keys: List[str], features_keys: List[str]
         additional_color_features.append(ndvi)
         additional_color_keys.append("ndvi")
 
+    for name in features_keys + color_keys:
+        is_nan = np.isnan(points[name])
+        points[name][is_nan] = 0.0
+
     x = np.stack(
         [
             points[name]
