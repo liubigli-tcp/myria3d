@@ -95,6 +95,7 @@ def get_pdal_reader(las_path: str, epsg: str) -> pdal.Reader.las:
             filename=las_path,
             nosrs=True,
             override_srs=f"EPSG:{epsg}" if str(epsg).isdigit() else epsg,
+            use_eb_vlr=True
         )
 
     try :
@@ -134,6 +135,7 @@ def split_cloud_into_samples(
     subtile_width: Number,
     epsg: str,
     subtile_overlap: Number = 0,
+    min_num_of_points: Number = 512
 ):
     """Split LAS point cloud into samples.
 
@@ -156,7 +158,7 @@ def split_cloud_into_samples(
         radius = subtile_width // 2  # Square receptive field.
         minkowski_p = np.inf
         sample_idx = np.array(kd_tree.query_ball_point(center, r=radius, p=minkowski_p))
-        if not len(sample_idx):
+        if len(sample_idx) < min_num_of_points:
             # no points in this receptive fields
             continue
         sample_points = points[sample_idx]
