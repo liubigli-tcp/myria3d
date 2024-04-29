@@ -62,8 +62,9 @@ class HDF5LidarDataModule(LightningDataModule):
 
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.prefetch_factor = None if num_workers is 0 else prefetch_factor
+        self.prefetch_factor = None if num_workers == 0 else prefetch_factor
         self.sampler = sampler
+        self.shuffle_train_dataset = True if sampler is None else False
 
         t = transforms
         self.preparation_train_transform: TRANSFORMS_LIST = t.get("preparations_train_list", [])
@@ -151,7 +152,7 @@ class HDF5LidarDataModule(LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             prefetch_factor=self.prefetch_factor,
-            shuffle=True if self.sampler is None else False,
+            shuffle=self.shuffle_train_dataset,
             sampler=self.sampler,
         )
 
