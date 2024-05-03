@@ -63,8 +63,6 @@ class HDF5LidarDataModule(LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.prefetch_factor = None if num_workers == 0 else prefetch_factor
-        self.sampler = sampler
-        self.shuffle_train_dataset = True if sampler is None else False
 
         t = transforms
         self.preparation_train_transform: TRANSFORMS_LIST = t.get("preparations_train_list", [])
@@ -74,6 +72,12 @@ class HDF5LidarDataModule(LightningDataModule):
         )
         self.augmentation_transform: TRANSFORMS_LIST = t.get("augmentations_list", [])
         self.normalization_transform: TRANSFORMS_LIST = t.get("normalizations_list", [])
+
+        if callable(sampler):
+            sampler = sampler(dataset=self.dataset.traindata)
+
+        self.sampler_train = sampler
+        self.shuffle_train_dataset = True if sampler is None else False
 
     @property
     def train_transform(self) -> CustomCompose:
@@ -147,13 +151,14 @@ class HDF5LidarDataModule(LightningDataModule):
         return self._dataset
 
     def train_dataloader(self):
+
         return GeometricNoneProofDataloader(
             dataset=self.dataset.traindata,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             prefetch_factor=self.prefetch_factor,
             shuffle=self.shuffle_train_dataset,
-            sampler=self.sampler,
+            sampler=self.sampler_train,
         )
 
     def val_dataloader(self):
