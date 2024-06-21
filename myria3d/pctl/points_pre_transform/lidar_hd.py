@@ -21,7 +21,8 @@ def lidar_hd_pre_transform(points, pos_keys: List[str], features_keys: List[str]
         Data: the point cloud formatted for later deep learning training.
 
     """
-
+    color_keys = [] if color_keys is None else color_keys
+    features_keys = [] if features_keys is None else features_keys
     features = pos_keys + features_keys + color_keys
     # Positions and base features
     pos = np.asarray([points[k] for k in pos_keys], dtype=np.float32).transpose()

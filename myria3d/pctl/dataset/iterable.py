@@ -1,6 +1,7 @@
 from numbers import Number
 from typing import Callable, Optional
 
+import numpy
 import torch
 from numpy.typing import ArrayLike
 from torch.utils.data.dataset import IterableDataset
@@ -51,11 +52,14 @@ class InferenceDataset(IterableDataset):
             self.subtile_overlap,
         ):
             sample_data = self.points_pre_transform(sample_points)
-            sample_data["x"] = torch.from_numpy(sample_data["x"])
+            if isinstance(sample_data["x"], numpy.ndarray):
+                sample_data["x"] = torch.from_numpy(sample_data["x"])
+
             sample_data["y"] = torch.LongTensor(
                 sample_data["y"]
             )  # Need input classification for DropPointsByClass
-            sample_data["pos"] = torch.from_numpy(sample_data["pos"])
+            if isinstance(sample_data["pos"], numpy.ndarray):
+                sample_data["pos"] = torch.from_numpy(sample_data["pos"])
             # for final interpolation - should be kept as a np.ndarray to be batched as a list later.
             sample_data["idx_in_original_cloud"] = idx_in_original_cloud
 
