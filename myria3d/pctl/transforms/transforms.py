@@ -137,7 +137,9 @@ class StandardizeIntensity(BaseTransform):
     """Standardize RGB and log(Intensity) features."""
 
     def __call__(self, data: Data):
-        idx = data.x_features_names.index("Intensity")
+        # workaround for byte strings
+        features_names = [name.decode() if hasattr(name, 'decode') else name for name in data.x_features_names]
+        idx = features_names.index('Intensity')
         # Log transform to be less sensitive to large outliers - info is in lower values
         data.x[:, idx] = torch.log(data.x[:, idx] + 1)
         data.x[:, idx] = self.standardize_channel(data.x[:, idx])
@@ -160,11 +162,13 @@ class StandardizeRGBAndIntensity(BaseTransform):
     """Standardize RGB and log(Intensity) features."""
 
     def __call__(self, data: Data):
-        idx = data.x_features_names.index("Intensity")
+        # workaround for byte strings
+        features_names = [name.decode() if hasattr(name, 'decode') else name for name in data.x_features_names]
+        idx = features_names.index("Intensity")
         # Log transform to be less sensitive to large outliers - info is in lower values
         data.x[:, idx] = torch.log(data.x[:, idx] + 1)
         data.x[:, idx] = self.standardize_channel(data.x[:, idx])
-        idx = data.x_features_names.index("rgb_avg")
+        idx = features_names.index("rgb_avg")
         data.x[:, idx] = self.standardize_channel(data.x[:, idx])
         return data
 
