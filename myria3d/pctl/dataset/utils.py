@@ -55,17 +55,21 @@ def pdal_read_las_array(las_path: str, epsg: str, extra_dims: str, index: int = 
     return p1.arrays[0]
 
 
-def pdal_read_las_array_as_float32(las_path: str, epsg: str, extra_dims: str, index: int = None, count: int = None) -> np.array:
+def pdal_read_las_array_as_float32(las_path: str, epsg: str, extra_dims: str, index: int = None, count: int = None, offset: np.array = None) -> np.array:
     """Read LAS as a a named array, casted to floats."""
     arr = pdal_read_las_array(las_path, epsg, extra_dims, index, count)
-    arr['X'] -= arr['X'][0]
-    arr['Y'] -= arr['Y'][0]
-    arr['Z'] -= arr['Z'][0]
+
+    if offset is None:
+        offset = np.array([arr['X'][0], arr['Y'][0], arr['Z'][0]])
+
+    arr['X'] -= offset[0]
+    arr['Y'] -= offset[1]
+    arr['Z'] -= offset[2]
+
     all_floats = np.dtype({"names": arr.dtype.names, "formats": ["f4"] * len(arr.dtype.names)})
     out = arr.astype(all_floats)
 
     return out
-
 
 def get_metadata(las_path: str) -> dict:
     """ returns metadata contained in a las file
@@ -139,14 +143,17 @@ def get_pdal_info_metadata(las_path: str) -> Dict:
 
 def process_block(args):
     """Wrapper function for multiprocessing."""
-    las_path, epsg, extra_dims, index, count = args
-    return pdal_read_las_array_as_float32(las_path, epsg, extra_dims, index, count)
-
+    las_path, epsg, extra_dims, index, count, offset = args
+    return pdal_read_las_array_as_float32(las_path, epsg, extra_dims, index, count, offset=offset)
 
 # hdf5, iterable
 def pdal_read_las_array_as_float32_parallel(las_path, epsg, extra_dims=None, num_blocks=4):
     metadata = get_pdal_info_metadata(las_path)
     num_points = metadata["count"]
+    offset_x = metadata["offset_x"]
+    offset_y = metadata["offset_y"]
+    offset_z = metadata["offset_z"]
+    offset = np.array([offset_x, offset_y, offset_z], dtype=np.float32)
 
     # Calculate the number of points per block
     points_per_block = num_points // num_blocks
@@ -154,11 +161,11 @@ def pdal_read_las_array_as_float32_parallel(las_path, epsg, extra_dims=None, num
     # Create a pool of worker processes
     with mp.Pool(processes=mp.cpu_count()) as pool:
         # Prepare arguments for each process
-        args = [(las_path, epsg, extra_dims, i * points_per_block, points_per_block) for i in range(num_blocks)]
+        args = [(las_path, epsg, extra_dims, i * points_per_block, points_per_block, offset) for i in range(num_blocks)]
 
         # Process the last block separately to include any remaining points
         if num_points % num_blocks != 0:
-            args.append((las_path, epsg, extra_dims, num_blocks * points_per_block, num_points % points_per_block))
+            args.append((las_path, epsg, extra_dims, num_blocks * points_per_block, num_points % points_per_block, offset))
 
         # Map the process_block function to the list of arguments
         results = pool.map(process_block, args)
