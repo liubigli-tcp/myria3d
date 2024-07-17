@@ -6,6 +6,13 @@ checkpoints/
 runs/
 data/
 !tests/data/
+nbks/
+
+configs/datamodule/transforms/normalizations/spatial.yaml
+configs/datamodule/transforms/preparations/high_res_points_budget.yaml
+configs/dataset_description/20240417_electriclines.yaml
+configs/experiment/RandLaNet_electriclines.yaml
+
 
 # large files that are not tracked
 tests/data/toy_dataset.hdf5
