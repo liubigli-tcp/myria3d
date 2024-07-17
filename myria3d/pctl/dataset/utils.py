@@ -2,6 +2,7 @@ import glob
 import json
 from pathlib import Path
 import subprocess as sp
+import multiprocessing as mp
 from numbers import Number
 from typing import Dict, List, Literal, Union
 
@@ -38,7 +39,7 @@ def get_mosaic_of_centers(tile_width: Number, subtile_width: Number, subtile_ove
     return [np.array([x, y]) for x in xy_range for y in xy_range]
 
 
-def pdal_read_las_array(las_path: str, epsg: str):
+def pdal_read_las_array(las_path: str, epsg: str, extra_dims: str, index: int = None, count: int = None):
     """Read LAS as a named array.
 
     Args:
@@ -49,14 +50,14 @@ def pdal_read_las_array(las_path: str, epsg: str):
         np.ndarray: named array with all LAS dimensions, including extra ones, with dict-like access.
 
     """
-    p1 = pdal.Pipeline() | get_pdal_reader(las_path, epsg)
+    p1 = pdal.Pipeline() | get_pdal_reader(las_path, epsg, extra_dims, index, count)
     p1.execute()
     return p1.arrays[0]
 
 
-def pdal_read_las_array_as_float32(las_path: str, epsg: str):
+def pdal_read_las_array_as_float32(las_path: str, epsg: str, extra_dims: str, index: int = None, count: int = None) -> np.array:
     """Read LAS as a a named array, casted to floats."""
-    arr = pdal_read_las_array(las_path, epsg)
+    arr = pdal_read_las_array(las_path, epsg, extra_dims, index, count)
     arr['X'] -= arr['X'][0]
     arr['Y'] -= arr['Y'][0]
     arr['Z'] -= arr['Z'][0]
@@ -78,7 +79,7 @@ def get_metadata(las_path: str) -> dict:
     return pipeline.metadata
 
 
-def get_pdal_reader(las_path: str, epsg: str) -> pdal.Reader.las:
+def get_pdal_reader(las_path: str, epsg: str, extra_dims: str = None, start=None, count=None) -> pdal.Reader.las:
     """Standard Reader.
     Args:
         las_path (str): input LAS path to read.
@@ -87,16 +88,26 @@ def get_pdal_reader(las_path: str, epsg: str) -> pdal.Reader.las:
         pdal.Reader.las: reader to use in a pipeline.
 
     """
-
     if epsg :
-        # if an epsg in provided, force pdal to read the lidar file with it
-        # epsg can be added as a number like "2154" or as a string like "EPSG:2154"
-        return pdal.Reader.las(
+        reader_args = dict(
             filename=las_path,
             nosrs=True,
             override_srs=f"EPSG:{epsg}" if str(epsg).isdigit() else epsg,
-            use_eb_vlr=True
-        )
+            use_eb_vlr=True)
+
+        if start is not None:
+            reader_args["start"] = start
+        if count is not None:
+            reader_args["count"] = count
+
+        # if an epsg in provided, force pdal to read the lidar file with it
+        # epsg can be added as a number like "2154" or as a string like "EPSG:2154"
+        reader = pdal.Reader.las(**reader_args)
+
+        if extra_dims:
+            reader.extra_dims = extra_dims
+
+        return reader
 
     try :
         if get_metadata(las_path)['metadata']['readers.las']['srs']['compoundwkt']:
@@ -126,8 +137,35 @@ def get_pdal_info_metadata(las_path: str) -> Dict:
     return json_info["metadata"]
 
 
-# hdf5, iterable
+def process_block(args):
+    """Wrapper function for multiprocessing."""
+    las_path, epsg, extra_dims, index, count = args
+    return pdal_read_las_array_as_float32(las_path, epsg, extra_dims, index, count)
 
+
+# hdf5, iterable
+def pdal_read_las_array_as_float32_parallel(las_path, epsg, extra_dims=None, num_blocks=4):
+    metadata = get_pdal_info_metadata(las_path)
+    num_points = metadata["count"]
+
+    # Calculate the number of points per block
+    points_per_block = num_points // num_blocks
+
+    # Create a pool of worker processes
+    with mp.Pool(processes=mp.cpu_count()) as pool:
+        # Prepare arguments for each process
+        args = [(las_path, epsg, extra_dims, i * points_per_block, points_per_block) for i in range(num_blocks)]
+
+        # Process the last block separately to include any remaining points
+        if num_points % num_blocks != 0:
+            args.append((las_path, epsg, extra_dims, num_blocks * points_per_block, num_points % points_per_block))
+
+        # Map the process_block function to the list of arguments
+        results = pool.map(process_block, args)
+    # Combine the results
+    combined = np.concatenate(results)
+
+    return combined
 
 def split_cloud_into_samples(
     las_path: str,
@@ -135,7 +173,9 @@ def split_cloud_into_samples(
     subtile_width: Number,
     epsg: str,
     subtile_overlap: Number = 0,
-    min_num_of_points: Number = 512
+    min_num_of_points: Number = 512,
+    extra_dims=None,
+    num_blocks: int = 16
 ):
     """Split LAS point cloud into samples.
 
@@ -150,7 +190,11 @@ def split_cloud_into_samples(
         _type_: idx_in_original_cloud, and points of sample in pdal input format casted as floats.
 
     """
-    points = pdal_read_las_array_as_float32(las_path, epsg)
+    if num_blocks == 1:
+        points = pdal_read_las_array_as_float32(las_path, epsg, extra_dims)
+    else:
+        print("Reading point cloud in a parallel mode")
+        points = pdal_read_las_array_as_float32_parallel(las_path, epsg, extra_dims, num_blocks=num_blocks)
     pos = np.asarray([points["X"], points["Y"], points["Z"]], dtype=np.float32).transpose()
     kd_tree = cKDTree(pos[:, :2] - pos[:, :2].min(axis=0))
     XYs = get_mosaic_of_centers(tile_width, subtile_width, subtile_overlap=subtile_overlap)
