@@ -14,7 +14,7 @@ train:
   GridSampling:
     _target_: torch_geometric.transforms.GridSampling
     _args_:
-      - 0.05
+      - 0.01
 
   MinimumNumNodes:
     _target_: myria3d.pctl.transforms.transforms.MinimumNumNodes
@@ -49,7 +49,7 @@ eval:
   GridSampling:
     _target_: torch_geometric.transforms.GridSampling
     _args_:
-      - 0.05
+      - 0.01
 
   MinimumNumNodes:
     _target_: myria3d.pctl.transforms.transforms.MinimumNumNodes
@@ -78,7 +78,7 @@ predict:
   GridSampling:
     _target_: torch_geometric.transforms.GridSampling
     _args_:
-      - 0.05
+      - 0.01
 
   MinimumNumNodes:
     _target_: myria3d.pctl.transforms.transforms.MinimumNumNodes
