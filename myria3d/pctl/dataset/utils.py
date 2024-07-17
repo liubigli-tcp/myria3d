@@ -193,7 +193,6 @@ def split_cloud_into_samples(
     if num_blocks == 1:
         points = pdal_read_las_array_as_float32(las_path, epsg, extra_dims)
     else:
-        print("Reading point cloud in a parallel mode")
         points = pdal_read_las_array_as_float32_parallel(las_path, epsg, extra_dims, num_blocks=num_blocks)
     pos = np.asarray([points["X"], points["Y"], points["Z"]], dtype=np.float32).transpose()
     kd_tree = cKDTree(pos[:, :2] - pos[:, :2].min(axis=0))
