@@ -39,7 +39,7 @@ def get_mosaic_of_centers(tile_width: Number, subtile_width: Number, subtile_ove
     return [np.array([x, y]) for x in xy_range for y in xy_range]
 
 
-def pdal_read_las_array(las_path: str, epsg: str, extra_dims: str, index: int = None, count: int = None):
+def pdal_read_las_array(las_path: str, epsg: str, extra_dims: str = None, index: int = None, count: int = None):
     """Read LAS as a named array.
 
     Args:
@@ -130,7 +130,7 @@ def get_pdal_info_metadata(las_path: str) -> Dict:
     Returns:
         (dict): dictionary containing metadata from the las file
     """
-    r = sp.run(["pdal", "info", "--metadata", las_path], capture_output=True)
+    r = sp.run(["pdal", "info", "--metadata", las_path, '--readers.las.nosrs=true'], capture_output=True)
     if r.returncode == 1:
         msg = r.stderr.decode()
         raise RuntimeError(msg)
@@ -141,10 +141,15 @@ def get_pdal_info_metadata(las_path: str) -> Dict:
     return json_info["metadata"]
 
 
-def process_block(args):
+def process_block_float32(args):
     """Wrapper function for multiprocessing."""
     las_path, epsg, extra_dims, index, count, offset = args
     return pdal_read_las_array_as_float32(las_path, epsg, extra_dims, index, count, offset=offset)
+
+def process_block(args):
+    """Wrapper function for multiprocessing."""
+    las_path, epsg, extra_dims, index, count = args
+    return pdal_read_las_array(las_path, epsg, extra_dims, index, count)
 
 # hdf5, iterable
 def pdal_read_las_array_as_float32_parallel(las_path, epsg, extra_dims=None, num_blocks=4):
@@ -168,11 +173,35 @@ def pdal_read_las_array_as_float32_parallel(las_path, epsg, extra_dims=None, num
             args.append((las_path, epsg, extra_dims, num_blocks * points_per_block, num_points % points_per_block, offset))
 
         # Map the process_block function to the list of arguments
+        results = pool.map(process_block_float32, args)
+    # Combine the results
+    combined = np.concatenate(results)
+
+    return combined
+
+
+def pdal_read_las_array_parallel(las_path, epsg, extra_dims=None, num_blocks=4):
+    metadata = get_pdal_info_metadata(las_path)
+    num_points = metadata["count"]
+    # Calculate the number of points per block
+    points_per_block = num_points // num_blocks
+
+    # Create a pool of worker processes
+    with mp.Pool(processes=mp.cpu_count()) as pool:
+        # Prepare arguments for each process
+        args = [(las_path, epsg, extra_dims, i * points_per_block, points_per_block) for i in range(num_blocks)]
+
+        # Process the last block separately to include any remaining points
+        if num_points % num_blocks != 0:
+            args.append((las_path, epsg, extra_dims, num_blocks * points_per_block, num_points % points_per_block))
+
+        # Map the process_block function to the list of arguments
         results = pool.map(process_block, args)
     # Combine the results
     combined = np.concatenate(results)
 
     return combined
+
 
 def split_cloud_into_samples(
     las_path: str,
