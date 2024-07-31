@@ -50,6 +50,7 @@ class InferenceDataset(IterableDataset):
             self.subtile_width,
             self.epsg,
             self.subtile_overlap,
+            num_blocks=1,
         ):
             sample_data = self.points_pre_transform(sample_points)
             if isinstance(sample_data["x"], numpy.ndarray):
