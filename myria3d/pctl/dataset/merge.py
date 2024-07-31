@@ -7,20 +7,20 @@ from pdaltools import las_info
 from glob import glob
 from pathlib import Path
 
-from .utils import pdal_read_las_array, get_pdal_reader
+from .utils import get_pdal_reader, pdal_read_las_array_parallel
 
 
 def merge_features_and_classification(features_path: str, base_path: str, filename: str, scales: List[str], cloud_outpath: str, epsg: str = "4326"):
     base_filename = os.path.join(base_path, f"{filename}.laz")
     print(f"Reading PC {base_filename} with classification")
-    arr_class = pdal_read_las_array(base_filename, epsg)
+    arr_class = pdal_read_las_array_parallel(base_filename, epsg, extra_dims='all', num_blocks=16)
 
     arr_feats = []
     feats_dt = []
     for scale in scales:
         filepath = os.path.join(features_path, filename, f"{scale}.laz")
         print(f"Reading PC {filepath} with features")
-        arr_feats.append(pdal_read_las_array(filepath, epsg))
+        arr_feats.append(pdal_read_las_array_parallel(filepath, epsg, extra_dims='all', num_blocks=16))
         feats_dt += [(f'Linearity_{scale}', '<f8'),
                      (f'Planarity_{scale}', '<f8'),
                      (f'Scattering_{scale}', '<f8'),
